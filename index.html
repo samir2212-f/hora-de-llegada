@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Control de Asistencia · Liliput</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#f0f2f5;--white:#ffffff;--surface:#f7f8fa;--border:#e4e7ec;
+      --text:#0f1117;--muted:#7a8494;
+      --primary:#1a56db;--primary-l:#e8efff;
+      --success:#0d9f6e;--success-l:#d1fae5;
+      --danger:#e02424;--danger-l:#fee2e2;
+      --warning:#d97706;--warning-l:#fef3c7;
+      --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);
+      --shadow-lg:0 8px 32px rgba(0,0,0,.12);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);}
+
+    .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+      transition:opacity .4s,transform .4s;z-index:1;}
+    .screen.hidden{opacity:0;pointer-events:none;transform:scale(.98);}
+
+    /* LOGIN */
+    #loginScreen{background:linear-gradient(135deg,#1a237e 0%,#1a56db 50%,#0891b2 100%);}
+    #loginScreen::before{content:'';position:fixed;inset:0;
+      background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");}
+    .login-box{background:var(--white);border-radius:20px;padding:44px 40px;width:100%;max-width:400px;
+      position:relative;z-index:2;box-shadow:0 24px 80px rgba(0,0,0,.25);
+      animation:popIn .5s cubic-bezier(.22,1,.36,1) both;}
+    @keyframes popIn{from{opacity:0;transform:translateY(32px) scale(.96);}to{opacity:1;transform:none;}}
+    .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
+    .login-logo-icon{width:42px;height:42px;background:linear-gradient(135deg,#1a56db,#0891b2);
+      border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+    .login-logo-text{font-size:18px;font-weight:800;}
+    .login-logo-sub{font-size:11px;color:var(--muted);}
+    .login-heading{font-size:24px;font-weight:800;margin-bottom:4px;}
+    .login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
+    .field{margin-bottom:14px;}
+    .field label{display:block;font-size:11px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;font-family:'JetBrains Mono',monospace;}
+    .field input,.field select{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;
+      font-size:14px;font-family:'Outfit',sans-serif;outline:none;color:var(--text);
+      background:var(--surface);transition:border-color .2s,box-shadow .2s;}
+    .field input:focus,.field select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.1);}
+    .field-row{display:flex;gap:10px;}
+    .field-row .field{flex:1;}
+    .btn-primary{width:100%;padding:13px;background:linear-gradient(135deg,#1a56db,#1e40af);
+      border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;
+      font-family:'Outfit',sans-serif;cursor:pointer;margin-top:4px;
+      transition:opacity .2s,transform .15s;box-shadow:0 4px 14px rgba(26,86,219,.35);}
+    .btn-primary:hover{opacity:.92;transform:translateY(-1px);}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+    .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);
+      border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;
+      margin-right:7px;vertical-align:middle;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .error-box{background:var(--danger-l);border:1px solid #fca5a5;border-radius:8px;
+      padding:10px 13px;font-size:12px;color:var(--danger);margin-top:10px;display:none;
+      font-family:'JetBrains Mono',monospace;}
+    .error-box.show{display:block;}
+
+    /* TOPBAR (empleado) */
+    .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;
+      height:60px;background:var(--white);border-bottom:1px solid var(--border);
+      box-shadow:0 1px 4px rgba(0,0,0,.05);position:sticky;top:0;z-index:100;flex-shrink:0;}
+    .topbar-brand{display:flex;align-items:center;gap:10px;}
+    .topbar-icon{width:34px;height:34px;background:linear-gradient(135deg,#1a56db,#0891b2);
+      border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+    .topbar-name{font-size:15px;font-weight:800;}
+    .topbar-right{display:flex;align-items:center;gap:10px;}
+    .user-chip{display:flex;align-items:center;gap:7px;padding:5px 12px;
+      background:var(--surface);border:1px solid var(--border);border-radius:20px;}
+    .user-dot{width:8px;height:8px;border-radius:50%;background:var(--success);}
+    .user-chip-email{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+    .btn-out{padding:7px 14px;border-radius:8px;border:1px solid var(--border);
+      background:var(--white);color:var(--muted);font-size:12px;font-weight:600;
+      font-family:'Outfit',sans-serif;cursor:pointer;transition:all .2s;}
+    .btn-out:hover{border-color:var(--danger);color:var(--danger);}
+    .btn-admin{padding:7px 14px;border-radius:8px;border:1px solid var(--primary);
+      background:var(--primary);color:#fff;font-size:12px;font-weight:600;
+      font-family:'Outfit',sans-serif;cursor:pointer;transition:all .2s;margin-right:8px;}
+    .btn-admin:hover{opacity:0.9;}
+
+    /* EMPLOYEE SCREEN */
+    #empScreen{flex-direction:column;align-items:stretch;justify-content:flex-start;overflow-y:auto;}
+    .emp-body{flex:1;display:flex;align-items:center;justify-content:center;
+      padding:32px 16px;min-height:calc(100vh - 60px);}
+    .emp-card{background:var(--white);border-radius:20px;padding:40px;width:100%;max-width:420px;
+      box-shadow:var(--shadow-lg);animation:popIn .5s cubic-bezier(.22,1,.36,1) both;}
+    .clock-display{text-align:center;margin-bottom:32px;padding:24px;
+      background:linear-gradient(135deg,#1a237e,#1a56db);border-radius:14px;}
+    .clock-time{font-size:52px;font-weight:900;color:#fff;letter-spacing:-.02em;
+      font-family:'JetBrains Mono',monospace;line-height:1;}
+    .clock-date{font-size:13px;color:rgba(255,255,255,.65);margin-top:6px;}
+    .emp-section-title{font-size:11px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px;}
+    .emp-name-row{display:flex;align-items:center;gap:12px;padding:14px;
+      background:var(--primary-l);border-radius:10px;margin-bottom:20px;}
+    .emp-avatar{width:38px;height:38px;border-radius:9px;flex-shrink:0;
+      background:linear-gradient(135deg,#1a56db,#0891b2);
+      display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;}
+    .emp-name-text{font-size:14px;font-weight:700;}
+    .emp-email-text{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+    .already-box{background:var(--success-l);border:1px solid #6ee7b7;border-radius:12px;
+      padding:20px;text-align:center;display:none;}
+    .already-box.show{display:block;}
+    .already-icon{font-size:36px;margin-bottom:8px;}
+    .already-title{font-size:15px;font-weight:700;color:var(--success);}
+    .already-time{font-size:12px;color:var(--muted);margin-top:4px;font-family:'JetBrains Mono',monospace;}
+    .btn-check{width:100%;padding:16px;margin-top:16px;
+      background:linear-gradient(135deg,#0d9f6e,#059669);border:none;border-radius:12px;
+      color:#fff;font-size:16px;font-weight:800;font-family:'Outfit',sans-serif;cursor:pointer;
+      box-shadow:0 4px 16px rgba(13,159,110,.3);transition:opacity .2s,transform .15s;}
+    .btn-check:hover{opacity:.93;transform:translateY(-1px);}
+    .btn-check:disabled{opacity:.5;cursor:not-allowed;transform:none;background:var(--muted);box-shadow:none;}
+    .schedule-note{text-align:center;margin-top:12px;font-size:12px;color:var(--muted);}
+    .schedule-note span{font-weight:700;color:var(--primary);}
+    .location-status{margin-top:10px;font-size:12px;color:var(--muted);text-align:center;}
+
+    /* ADMIN SCREEN */
+    #adminScreen{flex-direction:column;align-items:stretch;justify-content:flex-start;overflow-y:auto;}
+    .admin-body{padding:28px;max-width:1200px;margin:0 auto;width:100%;}
+
+    .tabs{display:flex;gap:4px;background:var(--white);border:1px solid var(--border);
+      border-radius:12px;padding:4px;margin-bottom:28px;width:fit-content;box-shadow:var(--shadow);}
+    .tab{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;
+      cursor:pointer;color:var(--muted);transition:all .2s;white-space:nowrap;}
+    .tab.active{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(26,86,219,.3);}
+    .tab-content{display:none;}
+    .tab-content.active{display:block;animation:fadeIn .3s ease;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+    /* stats simplificadas */
+    .stats-row{display:grid;grid-template-columns:repeat(1,1fr);gap:14px;margin-bottom:24px;max-width:300px;}
+    .stat{background:var(--white);border:1px solid var(--border);border-radius:14px;
+      padding:18px 20px;box-shadow:var(--shadow);}
+    .stat-val{font-size:30px;font-weight:900;font-family:'JetBrains Mono',monospace;margin-bottom:3px;color:var(--primary);}
+    .stat-lbl{font-size:12px;color:var(--muted);font-weight:600;}
+
+    .filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:24px;flex-wrap:wrap;}
+    .filter-bar label{font-size:12px;font-weight:700;color:var(--muted);
+      font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.08em;}
+    .filter-bar input[type=date]{padding:8px 12px;border:1.5px solid var(--border);border-radius:9px;
+      font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;color:var(--text);
+      background:var(--white);transition:border-color .2s;}
+    .filter-bar input[type=date]:focus{border-color:var(--primary);}
+    .btn-sm{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;
+      font-family:'Outfit',sans-serif;cursor:pointer;border:none;transition:all .2s;}
+    .btn-sm.primary{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(26,86,219,.2);}
+    .btn-sm.primary:hover{opacity:.88;}
+    .btn-sm.ghost{background:var(--white);color:var(--muted);border:1.5px solid var(--border);}
+    .btn-sm.ghost:hover{border-color:var(--primary);color:var(--primary);}
+    .btn-sm.success{background:var(--success);color:#fff;}
+    .btn-sm.success:hover{opacity:.9;}
+
+    .emp-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:18px;}
+    .emp-att-card{background:var(--white);border:1px solid var(--border);border-radius:16px;
+      overflow:hidden;box-shadow:var(--shadow);transition:box-shadow .2s;position:relative;}
+    .emp-att-card:hover{box-shadow:var(--shadow-lg);}
+
+    .eac-header{display:flex;align-items:center;gap:12px;padding:16px 18px;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(135deg,var(--primary-l),#f0f7ff);}
+    .eac-avatar{width:46px;height:46px;border-radius:12px;flex-shrink:0;
+      background:linear-gradient(135deg,#1a56db,#0891b2);
+      display:flex;align-items:center;justify-content:center;
+      color:#fff;font-size:16px;font-weight:800;}
+    .eac-info{flex:1;min-width:0;}
+    .eac-name{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .eac-email{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .eac-schedule{font-size:11px;color:var(--primary);margin-top:2px;}
+    .eac-today-badge{flex-shrink:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+    .mini-badge{display:inline-block;padding:4px 10px;border-radius:20px;
+      font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;white-space:nowrap;
+      background:var(--surface);color:var(--muted);border:1px solid var(--border);}
+    .location-badge{background:#e8f0fe;color:#1a56db;border-color:#1a56db;}
+
+    .eac-body{max-height:400px;overflow-y:auto;}
+    .eac-row{display:flex;align-items:center;justify-content:space-between;
+      padding:11px 18px;border-bottom:1px solid var(--border);font-size:13px;}
+    .eac-row:last-child{border-bottom:none;}
+    .eac-row.is-today{background:#f0f7ff;}
+    .eac-date{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px;}
+    .eac-date .today-tag{color:var(--primary);font-weight:700;margin-left:5px;}
+    .eac-right{display:flex;align-items:center;gap:8px;}
+    .eac-time{font-weight:700;font-family:'JetBrains Mono',monospace;font-size:13px;}
+    .delete-att{color:var(--danger);cursor:pointer;padding:2px 6px;border-radius:4px;
+      font-size:14px;transition:background .2s;margin-left:4px;}
+    .delete-att:hover{background:var(--danger-l);}
+
+    .eac-empty{padding:22px 18px;text-align:center;color:var(--muted);font-size:13px;}
+    .eac-more-btn{width:100%;padding:11px;background:var(--surface);border:none;
+      border-top:1px solid var(--border);font-size:12px;font-weight:700;color:var(--primary);
+      cursor:pointer;font-family:'Outfit',sans-serif;transition:background .2s;letter-spacing:.03em;}
+    .eac-more-btn:hover{background:var(--primary-l);}
+
+    .empty-state{padding:60px;text-align:center;color:var(--muted);}
+    .empty-icon{font-size:44px;margin-bottom:14px;}
+    .empty-text{font-size:15px;font-weight:700;}
+    .empty-sub{font-size:13px;margin-top:6px;}
+    .loading-center{padding:60px;text-align:center;color:var(--muted);font-size:13px;}
+
+    .create-form{background:var(--white);border:1px solid var(--border);border-radius:16px;
+      padding:32px;max-width:500px;box-shadow:var(--shadow);}
+    .create-form h3{font-size:17px;font-weight:800;margin-bottom:6px;}
+    .create-form p{font-size:13px;color:var(--muted);margin-bottom:24px;}
+    .field-note{font-size:11px;color:var(--muted);margin-top:4px;}
+
+    .users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:20px;}
+    .user-card{background:var(--white);border:1px solid var(--border);border-radius:14px;
+      padding:18px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;
+      transition:transform .2s,box-shadow .2s;}
+    .user-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);}
+    .uc-avatar{width:42px;height:42px;border-radius:10px;flex-shrink:0;
+      background:linear-gradient(135deg,#1a56db,#0891b2);
+      display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;}
+    .uc-name{font-size:13px;font-weight:700;margin-bottom:2px;}
+    .uc-email{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+    .user-schedule{font-size:10px;color:var(--primary);margin-top:2px;}
+
+    .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;}
+    .toast{background:#fff;border-radius:8px;padding:12px 20px;box-shadow:0 4px 12px rgba(0,0,0,.15);
+      font-size:14px;font-weight:500;border-left:4px solid;animation:slideIn .3s ease, fadeOut .5s ease 4.5s forwards;}
+    .toast.success{border-left-color:var(--success);background:var(--success-l);color:var(--success);}
+    .toast.error{border-left-color:var(--danger);background:var(--danger-l);color:var(--danger);}
+    .toast.info{border-left-color:var(--primary);background:var(--primary-l);color:var(--primary);}
+    .toast.warning{border-left-color:var(--warning);background:var(--warning-l);color:var(--warning);}
+    @keyframes slideIn{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+    @keyframes fadeOut{to{opacity:0;transform:translateX(100%);}}
+
+    @media(max-width:700px){
+      .stats-row{grid-template-columns:1fr;}
+      .login-box,.emp-card,.create-form{padding:28px 20px;}
+      .admin-body{padding:14px;}
+      .topbar{padding:0 14px;}
+      .emp-cards-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">🏢</div>
+      <div>
+        <div class="login-logo-text">Liliput Software</div>
+        <div class="login-logo-sub">Control de Asistencia</div>
+      </div>
+    </div>
+    <h1 class="login-heading">Iniciar sesión</h1>
+    <p class="login-sub">Ingresa tus credenciales para continuar</p>
+    <div class="field"><label>Correo</label>
+      <input type="email" id="loginEmail" placeholder="tu@correo.com" autocomplete="email"/></div>
+    <div class="field"><label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/></div>
+    <button class="btn-primary" id="loginBtn" onclick="doLogin()">Entrar</button>
+    <div class="error-box" id="loginError"></div>
+  </div>
+</div>
+
+<!-- EMPLEADO (pantalla principal para todos) -->
+<div class="screen hidden" id="empScreen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon">🏢</div>
+      <span class="topbar-name">Liliput · Asistencia</span>
+    </div>
+    <div class="topbar-right">
+      <!-- Botón para ir al panel de admin, solo visible para admins -->
+      <button class="btn-admin" id="goToAdminBtn" onclick="showAdminPanel()" style="display:none;">Panel Admin</button>
+      <div class="user-chip">
+        <div class="user-dot"></div>
+        <span class="user-chip-email" id="empEmailChip"></span>
+      </div>
+      <button class="btn-out" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+  <div class="emp-body">
+    <div class="emp-card">
+      <div class="clock-display">
+        <div class="clock-time" id="clockTime">--:--:--</div>
+        <div class="clock-date" id="clockDate"></div>
+      </div>
+      <div class="emp-section-title">Tu cuenta</div>
+      <div class="emp-name-row">
+        <div class="emp-avatar">👤</div>
+        <div>
+          <div class="emp-name-text" id="empNameDisplay"></div>
+          <div class="emp-email-text" id="empEmailDisplay"></div>
+        </div>
+      </div>
+      <div class="already-box" id="alreadyBox">
+        <div class="already-icon">✅</div>
+        <div class="already-title">Asistencia registrada hoy</div>
+        <div class="already-time" id="alreadyTime"></div>
+      </div>
+      <button class="btn-check" id="checkBtn" onclick="markAttendance()">
+        ✔&nbsp; Registrar mi asistencia
+      </button>
+      <div class="schedule-note">Hora de entrada esperada: <span id="empScheduleDisplay"></span></div>
+      <div class="location-status" id="locationStatus">Obteniendo ubicación...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN (panel secundario) -->
+<div class="screen hidden" id="adminScreen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon">⚡</div>
+      <span class="topbar-name">Panel Admin · Liliput</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-chip">
+        <div class="user-dot" style="background:#f59e0b;"></div>
+        <span class="user-chip-email" id="adminEmail"></span>
+      </div>
+      <button class="btn-out" onclick="goToEmployeeScreen()">Volver a mi asistencia</button>
+      <button class="btn-out" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+
+  <div class="admin-body">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('asistencias',this)">📋 Asistencias</div>
+      <div class="tab" onclick="switchTab('crear',this)">➕ Crear usuario</div>
+      <div class="tab" onclick="switchTab('usuarios',this)">👥 Usuarios</div>
+    </div>
+
+    <!-- ASISTENCIAS -->
+    <div class="tab-content active" id="tab-asistencias">
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="stTotal">—</div><div class="stat-lbl">Registros hoy</div></div>
+      </div>
+      <div class="filter-bar">
+        <label>Fecha:</label>
+        <input type="date" id="filterDate" max=""/>
+        <button class="btn-sm primary" onclick="loadAttendance()">Filtrar</button>
+        <button class="btn-sm ghost" onclick="goToday()">Hoy</button>
+        <button class="btn-sm ghost" onclick="goYesterday()">Ayer</button>
+        <button class="btn-sm ghost" onclick="goThisWeek()">Esta semana</button>
+        <button class="btn-sm success" onclick="exportToCSV()">⬇ CSV</button>
+      </div>
+      <div id="empCardsArea"><div class="loading-center">Cargando...</div></div>
+    </div>
+
+    <!-- CREAR USUARIO (con campo de rol) -->
+    <div class="tab-content" id="tab-crear">
+      <div class="create-form">
+        <h3>Crear cuenta</h3>
+        <p>Puedes crear empleados o administradores. Los administradores tendrán acceso al panel.</p>
+        <div class="field"><label>Nombre completo</label>
+          <input type="text" id="newName" placeholder="Ej: Juan Pérez"/></div>
+        <div class="field"><label>Correo electrónico</label>
+          <input type="email" id="newEmail" placeholder="usuario@empresa.com"/></div>
+        <div class="field"><label>Contraseña</label>
+          <input type="password" id="newPass" placeholder="Mínimo 6 caracteres"/></div>
+        
+        <!-- Horario personalizado (solo relevante para empleados) -->
+        <div class="field">
+          <label>Hora de entrada esperada (solo para empleados)</label>
+          <div class="field-row">
+            <div class="field">
+              <input type="number" id="newEntryHour" min="0" max="23" value="9" placeholder="Hora"/>
+            </div>
+            <div class="field">
+              <input type="number" id="newEntryMinute" min="0" max="59" value="0" placeholder="Minuto"/>
+            </div>
+          </div>
+          <div class="field-note">Formato 24h. El administrador evaluará si llegó tarde.</div>
+        </div>
+
+        <!-- Campo de rol -->
+        <div class="field">
+          <label>Rol</label>
+          <select id="newRole">
+            <option value="empleado">Empleado</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+
+        <button class="btn-primary" id="createBtn" onclick="createUser()">Crear cuenta</button>
+        <div class="error-box" id="createError"></div>
+      </div>
+    </div>
+
+    <!-- USUARIOS -->
+    <div class="tab-content" id="tab-usuarios">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:14px;
+        padding:18px 20px;box-shadow:var(--shadow);">
+        <div style="font-size:14px;font-weight:700;">Usuarios registrados</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Cuentas activas en el sistema</div>
+      </div>
+      <div class="users-grid" id="usersList">
+        <div class="loading-center" style="grid-column:1/-1">Cargando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+         createUserWithEmailAndPassword, updateProfile }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where,
+         getDocs, getDoc, doc, setDoc, deleteDoc, Timestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ---------- CONSTANTES ---------- */
+const ADMIN_EMAIL  = "iaysoftwareliliput@gmail.com"; // Admin fijo para inicializar
+const PREVIEW_ROWS = 5;
+
+/* ---------- CONFIGURACIÓN DE GEOFENCIA ---------- */
+// Coordenadas de la oficina (cámbialas por las tuyas)
+/* ---------- CONFIGURACIÓN DE GEOFENCIA ---------- */
+// Coordenadas de la oficina (cámbialas por las tuyas)
+const OFFICE_LOCATION = {
+  lat: -5.182824105794872,       // ← Tu latitud
+  lng: -80.65569480769832,  // ← Tu longitud
+  radius: 79        // Radio en metros (ajústalo si quieres)
+};
+
+/* ---------- FIREBASE INIT ---------- */
+const app  = initializeApp({
+  apiKey:"AIzaSyCJSvqmd1v1FTS53n_6yqHX429Ca65Yh1A",
+  authDomain:"horadellegada.firebaseapp.com",
+  projectId:"horadellegada",
+  storageBucket:"horadellegada.firebasestorage.app",
+  messagingSenderId:"509263431300",
+  appId:"1:509263431300:web:59c3aaee53372baca7e4d1"
+});
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+/* ---------- UTILS ---------- */
+const pad = n => String(n).padStart(2,"0");
+const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`; };
+const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate()-1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const esc = s => { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; };
+const ini = name => (name || "?").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+const fmtDate = str => {
+  const [y,m,d] = str.split("-");
+  const M = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  return `${parseInt(d)} ${M[parseInt(m)-1]} ${y}`;
+};
+const formatTime = (hour, minute) => `${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')}`;
+
+// Fórmula de Haversine para distancia entre dos puntos (en metros)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // metros
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2 - lat1) * Math.PI/180;
+  const Δλ = (lon2 - lon1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // metros
+}
+
+/* ---------- TOAST ---------- */
+function showToast(message, type = "info", duration = 5000) {
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, duration);
+}
+
+/* ---------- PANTALLAS ---------- */
+function showScreen(id) {
+  ["loginScreen", "empScreen", "adminScreen"].forEach(s =>
+    document.getElementById(s).classList.add("hidden"));
+  document.getElementById(id).classList.remove("hidden");
+}
+
+/* ---------- GEOFENCIA: MONITOREO DE UBICACIÓN ---------- */
+let watchId = null;
+let currentLocation = null;
+let lastDistance = null;
+
+function startGeofenceWatch() {
+  if (!navigator.geolocation) {
+    document.getElementById("locationStatus").textContent = "Geolocalización no soportada";
+    return;
+  }
+  
+  // Opciones: alta precisión, timeout 10s, sin caché
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0
+  };
+
+  watchId = navigator.geolocation.watchPosition(
+    (position) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      currentLocation = { lat: latitude, lng: longitude, accuracy };
+      
+      const distance = calculateDistance(latitude, longitude, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+      lastDistance = Math.round(distance);
+      
+      const within = distance <= OFFICE_LOCATION.radius;
+      const btn = document.getElementById("checkBtn");
+      
+      // Actualizar texto de estado
+      const statusEl = document.getElementById("locationStatus");
+      if (within) {
+        statusEl.textContent = `📍 Estás a ${lastDistance}m de la oficina (dentro del área)`;
+        statusEl.style.color = "var(--success)";
+        btn.disabled = false;
+      } else {
+        statusEl.textContent = `🌍 Estás a ${lastDistance}m de la oficina (fuera del área)`;
+        statusEl.style.color = "var(--danger)";
+        btn.disabled = true;
+      }
+      
+      // Si el botón está oculto porque ya registró hoy, no habilitar
+      if (btn.style.display === "none") {
+        btn.disabled = true;
+      }
+    },
+    (error) => {
+      let msg = "Error de geolocalización: ";
+      switch(error.code) {
+        case error.PERMISSION_DENIED: msg += "Permiso denegado"; break;
+        case error.POSITION_UNAVAILABLE: msg += "Ubicación no disponible"; break;
+        case error.TIMEOUT: msg += "Tiempo de espera agotado"; break;
+        default: msg += error.message;
+      }
+      document.getElementById("locationStatus").textContent = msg;
+      document.getElementById("locationStatus").style.color = "var(--danger)";
+      document.getElementById("checkBtn").disabled = true;
+    },
+    options
+  );
+}
+
+function stopGeofenceWatch() {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    currentLocation = null;
+  }
+}
+
+/* ---------- CAMBIO ENTRE EMPLEADO Y ADMIN ---------- */
+window.showAdminPanel = () => {
+  stopGeofenceWatch(); // Detener monitoreo al ir al admin
+  showScreen("adminScreen");
+  document.getElementById("filterDate").value = todayStr();
+  document.getElementById("filterDate").max = todayStr();
+  loadAttendance();
+  loadUsers();
+};
+
+window.goToEmployeeScreen = () => {
+  showScreen("empScreen");
+  const user = auth.currentUser;
+  if (user) {
+    updateEmployeeView(user);
+    startGeofenceWatch(); // Reiniciar monitoreo al volver
+  }
+};
+
+/* ---------- RELOJ ---------- */
+let clockInterval = null;
+function startClock() {
+  if (clockInterval) clearInterval(clockInterval);
+  const upd = () => {
+    const n = new Date();
+    document.getElementById("clockTime").textContent = n.toLocaleTimeString('es-PE', {hour12: false});
+    document.getElementById("clockDate").textContent =
+      n.toLocaleDateString('es-PE', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  };
+  upd();
+  clockInterval = setInterval(upd, 1000);
+}
+function stopClock() {
+  if (clockInterval) {
+    clearInterval(clockInterval);
+    clockInterval = null;
+  }
+}
+
+/* ---------- OBTENER HORARIO DEL EMPLEADO ---------- */
+async function getEmployeeSchedule(uid) {
+  try {
+    const userDoc = await getDoc(doc(db, "usuarios", uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      return {
+        hour: data.entryHour ?? 9,
+        minute: data.entryMinute ?? 0
+      };
+    }
+  } catch (e) {
+    console.error("Error obteniendo horario:", e);
+  }
+  return { hour: 9, minute: 0 };
+}
+
+/* ---------- ACTUALIZAR VISTA DE EMPLEADO ---------- */
+async function updateEmployeeView(user) {
+  const name = user.displayName || user.email.split("@")[0];
+  document.getElementById("empEmailChip").textContent = user.email;
+  document.getElementById("empNameDisplay").textContent = name;
+  document.getElementById("empEmailDisplay").textContent = user.email;
+  
+  const schedule = await getEmployeeSchedule(user.uid);
+  document.getElementById("empScheduleDisplay").textContent = formatTime(schedule.hour, schedule.minute);
+  
+  await checkToday(user);
+}
+
+/* ---------- AUTH STATE (con roles) ---------- */
+onAuthStateChanged(auth, async user => {
+  if (!user) {
+    stopClock();
+    stopGeofenceWatch();
+    showScreen("loginScreen");
+    return;
+  }
+
+  // Obtener o crear documento del usuario
+  let userDoc = await getDoc(doc(db, "usuarios", user.uid));
+  if (!userDoc.exists()) {
+    await setDoc(doc(db, "usuarios", user.uid), {
+      uid: user.uid,
+      nombre: user.displayName || user.email.split("@")[0],
+      email: user.email,
+      entryHour: 9,
+      entryMinute: 0,
+      role: user.email === ADMIN_EMAIL ? "admin" : "empleado",
+      creadoEn: Timestamp.now()
+    });
+    userDoc = await getDoc(doc(db, "usuarios", user.uid));
+  }
+
+  const role = userDoc.data().role;
+
+  // Mostrar botón de admin si corresponde
+  if (role === "admin") {
+    document.getElementById("goToAdminBtn").style.display = "inline-block";
+    document.getElementById("adminEmail").textContent = user.email;
+  } else {
+    document.getElementById("goToAdminBtn").style.display = "none";
+  }
+
+  // Siempre mostrar pantalla de empleado primero
+  showScreen("empScreen");
+  startClock();
+  await updateEmployeeView(user);
+  startGeofenceWatch(); // Iniciar monitoreo
+});
+
+/* ---------- LOGIN ---------- */
+window.doLogin = async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  const btn = document.getElementById("loginBtn");
+  const err = document.getElementById("loginError");
+  err.classList.remove("show");
+  if (!email || !pass) { err.textContent = "Completa todos los campos."; err.classList.add("show"); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Verificando...';
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (e) {
+    let m = "Error al iniciar sesión.";
+    if (["auth/user-not-found", "auth/wrong-password", "auth/invalid-credential"].includes(e.code))
+      m = "Correo o contraseña incorrectos.";
+    else if (e.code === "auth/invalid-email") m = "Correo no válido.";
+    else if (e.code === "auth/too-many-requests") m = "Demasiados intentos. Intenta más tarde.";
+    err.textContent = m; err.classList.add("show");
+  } finally {
+    btn.disabled = false; btn.innerHTML = "Entrar";
+  }
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !document.getElementById("loginScreen").classList.contains("hidden"))
+    window.doLogin();
+});
+
+/* ---------- LOGOUT ---------- */
+window.doLogout = () => {
+  stopClock();
+  stopGeofenceWatch();
+  signOut(auth);
+};
+
+/* ---------- EMPLEADO: check today ---------- */
+async function checkToday(user) {
+  const q = query(collection(db, "asistencias"),
+    where("uid", "==", user.uid), where("fecha", "==", todayStr()));
+  const snap = await getDocs(q);
+  const btn = document.getElementById("checkBtn");
+  if (!snap.empty) {
+    btn.style.display = "none";
+    document.getElementById("alreadyBox").classList.add("show");
+    document.getElementById("alreadyTime").textContent = "Registraste tu entrada a las " + snap.docs[0].data().hora;
+  } else {
+    btn.style.display = "block";
+    document.getElementById("alreadyBox").classList.remove("show");
+    // El botón se habilitará mediante geofence si está dentro
+  }
+}
+
+/* ---------- EMPLEADO: marcar asistencia (con ubicación) ---------- */
+window.markAttendance = async () => {
+  const user = auth.currentUser; if (!user) return;
+  const btn = document.getElementById("checkBtn");
+  
+  // Verificar si hay ubicación y si está dentro (por si acaso)
+  if (!currentLocation) {
+    showToast("No se ha podido obtener tu ubicación. Intenta de nuevo.", "warning");
+    return;
+  }
+  const distance = calculateDistance(currentLocation.lat, currentLocation.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+  if (distance > OFFICE_LOCATION.radius) {
+    showToast("No estás dentro del área permitida para registrar asistencia.", "warning");
+    return;
+  }
+
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Registrando...';
+  
+  try {
+    const schedule = await getEmployeeSchedule(user.uid);
+    const now = new Date();
+    const hora = now.toLocaleTimeString('es-PE', {hour12: false});
+    const fecha = todayStr();
+    
+    // Guardar también la ubicación
+    await addDoc(collection(db, "asistencias"), {
+      uid: user.uid, 
+      email: user.email,
+      nombre: user.displayName || user.email.split("@")[0],
+      fecha, 
+      hora, 
+      timestamp: Timestamp.fromDate(now),
+      horarioEsperado: formatTime(schedule.hour, schedule.minute),
+      location: {
+        lat: currentLocation.lat,
+        lng: currentLocation.lng,
+        accuracy: currentLocation.accuracy
+      },
+      distanceFromOffice: Math.round(distance),
+      withinGeofence: true
+    });
+    
+    btn.style.display = "none";
+    document.getElementById("alreadyBox").classList.add("show");
+    document.getElementById("alreadyTime").textContent = "Registraste tu entrada a las " + hora;
+    showToast("Asistencia registrada correctamente", "success");
+  } catch (e) {
+    showToast("Error: " + e.message, "error");
+    btn.disabled = false; btn.innerHTML = "✔ Registrar mi asistencia";
+    // Re-evaluar geofence
+    if (currentLocation) {
+      const d = calculateDistance(currentLocation.lat, currentLocation.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+      btn.disabled = d > OFFICE_LOCATION.radius;
+    }
+  }
+};
+
+/* ---------- ADMIN: filtros rápidos ---------- */
+window.goToday = () => {
+  document.getElementById("filterDate").value = todayStr();
+  loadAttendance();
+};
+window.goYesterday = () => {
+  document.getElementById("filterDate").value = yesterdayStr();
+  loadAttendance();
+};
+window.goThisWeek = () => {
+  showToast("Selecciona un rango manualmente (próximamente)", "info");
+  document.getElementById("filterDate").value = todayStr();
+  loadAttendance();
+};
+
+/* ---------- ADMIN: cargar asistencias ---------- */
+window.loadAttendance = async () => {
+  const area = document.getElementById("empCardsArea");
+  area.innerHTML = '<div class="loading-center">Cargando registros...</div>';
+  const fecha = document.getElementById("filterDate").value || todayStr();
+  document.getElementById("filterDate").value = fecha;
+
+  try {
+    const usersSnap = await getDocs(collection(db, "usuarios"));
+    const usuarios = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (usuarios.length === 0) {
+      area.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">No hay usuarios aún</div><div class="empty-sub">Crea usuarios desde "Crear usuario"</div></div>`;
+      document.getElementById("stTotal").textContent = "0";
+      return;
+    }
+
+    const daySnap = await getDocs(query(collection(db, "asistencias"), where("fecha", "==", fecha)));
+    const dayAtt = daySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    document.getElementById("stTotal").textContent = dayAtt.length;
+
+    area.innerHTML = "";
+    const grid = document.createElement("div");
+    grid.className = "emp-cards-grid";
+
+    for (const u of usuarios) {
+      const todayRec = dayAtt.find(a => a.uid === u.id) || null;
+      const card = await buildCardLazy(u, fecha, todayRec);
+      grid.appendChild(card);
+    }
+    area.appendChild(grid);
+  } catch (e) {
+    area.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Error al cargar</div><div class="empty-sub">${esc(e.message)}</div></div>`;
+  }
+};
+
+/* ---------- ADMIN: construir tarjeta con ubicación ---------- */
+async function buildCardLazy(user, selectedDate, todayRec) {
+  const card = document.createElement("div");
+  card.className = "emp-att-card";
+
+  const horario = formatTime(user.entryHour ?? 9, user.entryMinute ?? 0);
+  const rol = user.role || "empleado";
+
+  let badgeText = todayRec ? `Registrado: ${todayRec.hora}` : "Sin registro hoy";
+  let locationBadge = "";
+  if (todayRec && todayRec.location) {
+    const within = todayRec.withinGeofence ? "📍" : "🌍";
+    const dist = todayRec.distanceFromOffice ? ` a ${todayRec.distanceFromOffice}m` : "";
+    locationBadge = `<span class="mini-badge location-badge" title="Precisión: ${todayRec.location.accuracy?.toFixed(0)}m">${within}${dist}</span>`;
+  }
+  const deleteBtn = todayRec ? `<span class="delete-att" title="Eliminar registro de hoy" data-id="${todayRec.id}" data-uid="${user.id}" data-fecha="${selectedDate}">🗑️</span>` : "";
+
+  card.innerHTML = `
+    <div class="eac-header">
+      <div class="eac-avatar">${ini(user.nombre)}</div>
+      <div class="eac-info">
+        <div class="eac-name">${esc(user.nombre)}</div>
+        <div class="eac-email">${esc(user.email)}</div>
+        <div class="eac-schedule">${rol === 'admin' ? '👑 Administrador' : `Esperada: ${horario}`}</div>
+      </div>
+      <div class="eac-today-badge">
+        <span class="mini-badge">${badgeText}</span>
+        ${locationBadge}
+        ${deleteBtn}
+      </div>
+    </div>
+    <div class="eac-body" id="eac-body-${user.id}">
+      <div class="loading-center" style="padding:20px;">Cargando historial reciente...</div>
+    </div>
+  `;
+
+  if (todayRec) {
+    const delSpan = card.querySelector(`.delete-att[data-id="${todayRec.id}"]`);
+    delSpan.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteAttendance(todayRec.id, user.id, selectedDate, card);
+    });
+  }
+
+  const body = card.querySelector(`#eac-body-${user.id}`);
+  await loadUserHistoryPreview(user.id, body, selectedDate, PREVIEW_ROWS);
+
+  return card;
+}
+
+/* ---------- ADMIN: cargar vista previa del historial ---------- */
+async function loadUserHistoryPreview(uid, container, selectedDate, limitCount) {
+  try {
+    const q = query(collection(db, "asistencias"), where("uid", "==", uid));
+    const snap = await getDocs(q);
+    let registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    registros.sort((a, b) => {
+      if (a.fecha > b.fecha) return -1;
+      if (a.fecha < b.fecha) return 1;
+      return b.hora.localeCompare(a.hora);
+    });
+
+    const preview = registros.slice(0, limitCount);
+
+    if (preview.length === 0) {
+      container.innerHTML = `<div class="eac-empty">Sin registros de asistencia aún</div>`;
+      return;
+    }
+
+    let html = preview.map(r => {
+      const isToday = r.fecha === selectedDate;
+      const locationIcon = r.location ? (r.withinGeofence ? '📍' : '🌍') : '';
+      return `<div class="eac-row${isToday ? " is-today" : ""}">
+        <div class="eac-date">${fmtDate(r.fecha)}${isToday ? '<span class="today-tag">(hoy)</span>' : ''}</div>
+        <div class="eac-right">
+          <span class="eac-time">${r.hora}</span>
+          <span>${locationIcon}</span>
+          <span class="delete-att" data-id="${r.id}" data-uid="${uid}" data-fecha="${r.fecha}">🗑️</span>
+        </div>
+      </div>`;
+    }).join("");
+
+    if (registros.length > limitCount) {
+      html += `<button class="eac-more-btn" data-uid="${uid}" data-selected="${selectedDate}">▼ Ver historial completo (${registros.length} registros)</button>`;
+    }
+
+    container.innerHTML = html;
+
+    container.querySelectorAll(".delete-att").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const uid = btn.dataset.uid;
+        const fecha = btn.dataset.fecha;
+        deleteAttendance(id, uid, fecha, container.closest(".emp-att-card"));
+      });
+    });
+
+    const moreBtn = container.querySelector(".eac-more-btn");
+    if (moreBtn) {
+      moreBtn.addEventListener("click", async () => {
+        await loadFullUserHistory(uid, container, selectedDate);
+      });
+    }
+  } catch (e) {
+    container.innerHTML = `<div class="eac-empty">Error al cargar: ${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------- ADMIN: cargar historial completo ---------- */
+async function loadFullUserHistory(uid, container, selectedDate) {
+  container.innerHTML = `<div class="loading-center" style="padding:20px;">Cargando todo el historial...</div>`;
+  try {
+    const q = query(collection(db, "asistencias"), where("uid", "==", uid));
+    const snap = await getDocs(q);
+    let registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    registros.sort((a, b) => {
+      if (a.fecha > b.fecha) return -1;
+      if (a.fecha < b.fecha) return 1;
+      return b.hora.localeCompare(a.hora);
+    });
+
+    let html = registros.map(r => {
+      const isToday = r.fecha === selectedDate;
+      const locationIcon = r.location ? (r.withinGeofence ? '📍' : '🌍') : '';
+      return `<div class="eac-row${isToday ? " is-today" : ""}">
+        <div class="eac-date">${fmtDate(r.fecha)}${isToday ? '<span class="today-tag">(hoy)</span>' : ''}</div>
+        <div class="eac-right">
+          <span class="eac-time">${r.hora}</span>
+          <span>${locationIcon}</span>
+          <span class="delete-att" data-id="${r.id}" data-uid="${uid}" data-fecha="${r.fecha}">🗑️</span>
+        </div>
+      </div>`;
+    }).join("");
+
+    html += `<button class="eac-more-btn" data-uid="${uid}" data-selected="${selectedDate}">▲ Ver menos</button>`;
+    container.innerHTML = html;
+
+    container.querySelectorAll(".delete-att").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const uid = btn.dataset.uid;
+        const fecha = btn.dataset.fecha;
+        deleteAttendance(id, uid, fecha, container.closest(".emp-att-card"));
+      });
+    });
+
+    const lessBtn = container.querySelector(".eac-more-btn");
+    lessBtn.addEventListener("click", async () => {
+      await loadUserHistoryPreview(uid, container, selectedDate, PREVIEW_ROWS);
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="eac-empty">Error al cargar: ${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------- ADMIN: eliminar asistencia ---------- */
+async function deleteAttendance(docId, uid, fecha, cardElement) {
+  if (!confirm("¿Estás seguro de eliminar este registro de asistencia?")) return;
+  try {
+    await deleteDoc(doc(db, "asistencias", docId));
+    showToast("Registro eliminado", "success");
+    const body = cardElement.querySelector(".eac-body");
+    await loadUserHistoryPreview(uid, body, fecha, PREVIEW_ROWS);
+    loadAttendance(); // refrescar badge y total
+  } catch (e) {
+    showToast("Error al eliminar: " + e.message, "error");
+  }
+}
+
+/* ---------- ADMIN: exportar a CSV (con ubicación) ---------- */
+window.exportToCSV = () => {
+  const rows = [];
+  rows.push(["Empleado", "Email", "Rol", "Hora esperada", "Fecha", "Hora registrada", "Dentro geocerca", "Distancia (m)"]);
+  document.querySelectorAll(".emp-att-card").forEach(card => {
+    const header = card.querySelector(".eac-header");
+    if (!header) return;
+    const name = header.querySelector(".eac-name")?.textContent || "";
+    const email = header.querySelector(".eac-email")?.textContent || "";
+    const scheduleOrRole = header.querySelector(".eac-schedule")?.textContent || "";
+    const rowsInCard = card.querySelectorAll(".eac-row");
+    rowsInCard.forEach(row => {
+      const fechaElem = row.querySelector(".eac-date");
+      let fecha = fechaElem?.childNodes[0]?.textContent.trim() || "";
+      const hora = row.querySelector(".eac-time")?.textContent || "";
+      // No tenemos datos de ubicación aquí porque no están en la fila
+      rows.push([name, email, scheduleOrRole, fecha, hora, "", ""]);
+    });
+  });
+
+  if (rows.length <= 1) {
+    showToast("No hay datos para exportar", "info");
+    return;
+  }
+
+  let csvContent = rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `asistencias_${todayStr()}.csv`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("Exportado a CSV", "success");
+};
+
+/* ---------- ADMIN: crear usuario (con rol) ---------- */
+window.createUser = async () => {
+  const name = document.getElementById("newName").value.trim();
+  const email = document.getElementById("newEmail").value.trim();
+  const pass = document.getElementById("newPass").value;
+  const entryHour = parseInt(document.getElementById("newEntryHour").value) || 9;
+  const entryMinute = parseInt(document.getElementById("newEntryMinute").value) || 0;
+  const role = document.getElementById("newRole").value;
+  
+  const btn = document.getElementById("createBtn");
+  const err = document.getElementById("createError");
+
+  err.classList.remove("show");
+  if (!name || !email || !pass) { err.textContent = "Completa todos los campos."; err.classList.add("show"); return; }
+  if (pass.length < 6) { err.textContent = "Contraseña mínimo 6 caracteres."; err.classList.add("show"); return; }
+  if (entryHour < 0 || entryHour > 23 || entryMinute < 0 || entryMinute > 59) {
+    err.textContent = "Hora o minuto inválidos."; err.classList.add("show"); return;
+  }
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    err.textContent = "No hay sesión activa."; err.classList.add("show"); return;
+  }
+  const currentUserDoc = await getDoc(doc(db, "usuarios", currentUser.uid));
+  if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
+    err.textContent = "No tienes permisos de administrador."; err.classList.add("show"); return;
+  }
+
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Creando...';
+
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName: name });
+    await setDoc(doc(db, "usuarios", cred.user.uid), {
+      uid: cred.user.uid, 
+      nombre: name, 
+      email, 
+      entryHour: role === 'empleado' ? entryHour : 9,
+      entryMinute: role === 'empleado' ? entryMinute : 0,
+      role,
+      creadoEn: Timestamp.now()
+    });
+    
+    showToast(`Cuenta creada: ${name} (${email}) como ${role}`, "success");
+    
+    // Limpiar formulario
+    document.getElementById("newName").value = "";
+    document.getElementById("newEmail").value = "";
+    document.getElementById("newPass").value = "";
+    document.getElementById("newEntryHour").value = 9;
+    document.getElementById("newEntryMinute").value = 0;
+    document.getElementById("newRole").value = "empleado";
+    
+    // Cerrar sesión para que el admin actual vuelva a entrar (porque la sesión cambió al nuevo usuario)
+    await signOut(auth);
+    showToast("Se cerró la sesión. Inicia como administrador nuevamente.", "info");
+  } catch (e) {
+    let m = "Error al crear usuario.";
+    if (e.code === "auth/email-already-in-use") m = "Ese correo ya está registrado.";
+    else if (e.code === "auth/invalid-email") m = "Correo no válido.";
+    err.textContent = m; err.classList.add("show");
+  } finally {
+    btn.disabled = false; btn.innerHTML = "Crear cuenta";
+  }
+};
+
+/* ---------- ADMIN: cargar lista de usuarios (con rol) ---------- */
+async function loadUsers() {
+  const list = document.getElementById("usersList");
+  list.innerHTML = '<div class="loading-center" style="grid-column:1/-1">Cargando...</div>';
+  try {
+    const snap = await getDocs(collection(db, "usuarios"));
+    if (snap.empty) {
+      list.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👥</div><div class="empty-text">Sin usuarios aún</div><div class="empty-sub">Usa "Crear usuario" para agregar</div></div>`;
+      return;
+    }
+    list.innerHTML = snap.docs.map(d => {
+      const u = d.data();
+      const horario = u.role === 'admin' ? 'Administrador' : `Entrada: ${formatTime(u.entryHour ?? 9, u.entryMinute ?? 0)}`;
+      const avatarStyle = u.role === 'admin' ? 'background:linear-gradient(135deg,#f59e0b,#d97706);' : '';
+      return `<div class="user-card">
+        <div class="uc-avatar" style="${avatarStyle}">${ini(u.nombre)}</div>
+        <div>
+          <div class="uc-name">${esc(u.nombre)}</div>
+          <div class="uc-email">${esc(u.email)}</div>
+          <div class="user-schedule" style="color:${u.role === 'admin' ? '#f59e0b' : 'var(--primary)'};">${horario}</div>
+        </div>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    list.innerHTML = `<div class="loading-center" style="grid-column:1/-1">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------- TABS ---------- */
+window.switchTab = (id, el) => {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("tab-" + id).classList.add("active");
+  if (id === "usuarios") loadUsers();
+  if (id === "asistencias") loadAttendance();
+};
+</script>
+</body>
+</html>
