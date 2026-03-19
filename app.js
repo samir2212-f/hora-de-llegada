@@ -17,7 +17,7 @@ const FECHA_INICIO_SISTEMA = "2026-03-23"; // 📅 Lunes 23 de marzo de 2026 - E
 const OFFICE_LOCATION = {
   lat: -5.182824105794872,
   lng: -80.65569480769832,
-  radius: 200 // metros
+  radius: 20 // metros
 };
 
 /* ---------- FIREBASE INIT ---------- */
