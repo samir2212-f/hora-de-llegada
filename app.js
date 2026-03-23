@@ -3,15 +3,13 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
          createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where,
-         getDocs, getDoc, doc, setDoc, deleteDoc, updateDoc, Timestamp, arrayUnion }
+         getDocs, getDoc, doc, setDoc, deleteDoc, updateDoc, Timestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ---------- CONSTANTES ---------- */
 const ADMIN_EMAIL  = "iaysoftwareliliput@gmail.com";
 const PREVIEW_ROWS = 5;
 const JORNADA_COMPLETA_MINUTOS = 9 * 60; // 540 minutos (de 9am a 6pm)
-const FECHA_INICIO_SISTEMA = "2026-03-23"; // 📅 Lunes 23 de marzo de 2026 - El sistema empieza a contar desde aquí
-// const LUNCH_END_HOUR = 14;   // Hora fija de fin de almuerzo (14:00) - COMENTADO
 
 /* ---------- CONFIGURACIÓN DE GEOFENCIA ---------- */
 const OFFICE_LOCATION = {
@@ -110,24 +108,20 @@ function startGeofenceWatch() {
       const within = distance <= OFFICE_LOCATION.radius;
       const btnEntrada = document.getElementById("checkBtn");
       const btnSalida = document.getElementById("exitBtn");
-      // const btnLunchEnd = document.getElementById("lunchEndBtn"); // COMENTADO
       const statusEl = document.getElementById("locationStatus");
       if (within) {
         statusEl.textContent = `📍 Estás a ${lastDistance}m de la oficina (dentro del área)`;
         statusEl.style.color = "var(--success)";
         btnEntrada.disabled = false;
         btnSalida.disabled = false;
-        // if (btnLunchEnd) btnLunchEnd.disabled = false; // COMENTADO
       } else {
         statusEl.textContent = `🌍 Estás a ${lastDistance}m de la oficina (fuera del área)`;
         statusEl.style.color = "var(--danger)";
         btnEntrada.disabled = true;
         btnSalida.disabled = true;
-        // if (btnLunchEnd) btnLunchEnd.disabled = true; // COMENTADO
       }
       if (btnEntrada.style.display === "none") btnEntrada.disabled = true;
       if (btnSalida.style.display === "none") btnSalida.disabled = true;
-      // if (btnLunchEnd && btnLunchEnd.style.display === "none") btnLunchEnd.disabled = true; // COMENTADO
     },
     (error) => {
       let msg = "Error de geolocalización: ";
@@ -141,8 +135,6 @@ function startGeofenceWatch() {
       document.getElementById("locationStatus").style.color = "var(--danger)";
       document.getElementById("checkBtn").disabled = true;
       document.getElementById("exitBtn").disabled = true;
-      // const btnLunchEnd = document.getElementById("lunchEndBtn");
-      // if (btnLunchEnd) btnLunchEnd.disabled = true; // COMENTADO
     },
     options
   );
@@ -209,96 +201,20 @@ async function getEmployeeSchedule(uid) {
   return { workSchedule: {} };
 }
 
-/* ---------- FUNCIÓN PARA OBTENER SALDO ACTUAL ---------- */
-async function obtenerSaldoActual(uid) {
+/* ---------- FUNCIÓN PARA CALCULAR SALDO TOTAL EN TIEMPO REAL ---------- */
+/* ---------- FUNCIÓN PARA CALCULAR SALDO TOTAL DESDE FECHA FIJA ---------- */
+async function calcularSaldoTotal(uid) {
   try {
-    const usuarioDoc = await getDoc(doc(db, "usuarios", uid));
-    if (usuarioDoc.exists()) {
-      return usuarioDoc.data().saldoTotal || 0;
-    }
-    return 0;
-  } catch (error) {
-    console.error("Error obteniendo saldo actual:", error);
-    return 0;
-  }
-}
-
-/* ---------- FUNCIÓN PARA ACTUALIZAR SALDO (SUMA A LO EXISTENTE) ---------- */
-async function actualizarSaldoAcumulado(uid, nuevosMinutos, motivo = "") {
-  try {
-    // 1. Obtener el saldo actual de Firebase
-    const usuarioRef = doc(db, "usuarios", uid);
-    const usuarioDoc = await getDoc(usuarioRef);
-    
-    let saldoAnterior = 0;
-    if (usuarioDoc.exists() && usuarioDoc.data().saldoTotal !== undefined) {
-      saldoAnterior = usuarioDoc.data().saldoTotal;
-    }
-    
-    // 2. Calcular el nuevo saldo (suma al anterior)
-    const nuevoSaldo = saldoAnterior + nuevosMinutos;
-    
-    // 3. Guardar en Firebase (reemplaza el anterior con el nuevo acumulado)
-    await updateDoc(usuarioRef, {
-      saldoTotal: nuevoSaldo,
-      ultimaActualizacionSaldo: Timestamp.now(),
-      historialSaldo: arrayUnion({
-        fecha: Timestamp.now(),
-        minutos: nuevosMinutos,
-        saldoAnterior: saldoAnterior,
-        saldoNuevo: nuevoSaldo,
-        motivo: motivo
-      })
-    });
-    
-    console.log(`💰 Saldo actualizado: ${saldoAnterior} + ${nuevosMinutos} = ${nuevoSaldo} (${motivo})`);
-    
-    return nuevoSaldo;
-  } catch (error) {
-    console.error("Error actualizando saldo acumulado:", error);
-    return null;
-  }
-}
-
-/* ---------- FUNCIÓN PARA CALCULAR MINUTOS NUEVOS (SIN ACUMULAR) ---------- */
-async function calcularMinutosNuevos(uid, fechaInicio = null, fechaFin = null) {
-  try {
-    // Obtener datos del usuario
     const usuarioDoc = await getDoc(doc(db, "usuarios", uid));
     if (!usuarioDoc.exists()) return 0;
     
     const usuario = usuarioDoc.data();
     if (usuario.role === 'admin') return 0;
 
-    // Usar la fecha fija de inicio del sistema
-    if (!fechaInicio) {
-      fechaInicio = FECHA_INICIO_SISTEMA;
-    }
+    // FECHA FIJA DE INICIO: 22 de marzo de 2026
+    const FECHA_INICIO = "2026-03-23";
     
-    if (!fechaFin) {
-      fechaFin = todayStr();
-    }
-    
-    console.log(`📅 Calculando MINUTOS NUEVOS para ${usuario.nombre} desde ${fechaInicio} hasta ${fechaFin}`);
-
-    // Obtener la última fecha de cálculo para no duplicar
-    const ultimaFechaCalculo = usuario.ultimaFechaCalculo || fechaInicio;
-    
-    // Si ya se calculó hasta hoy, no hacer nada
-    if (ultimaFechaCalculo >= fechaFin) {
-      console.log("⏭️ Ya se calculó hasta hoy, no hay minutos nuevos");
-      return 0;
-    }
-    
-    // Calcular desde la última fecha hasta hoy
-    let inicioCalc = ultimaFechaCalculo > fechaInicio ? ultimaFechaCalculo : fechaInicio;
-    
-    // Si la última fecha es igual a la fecha de inicio, no avanzamos
-    if (inicioCalc === fechaInicio && ultimaFechaCalculo !== fechaInicio) {
-      inicioCalc = fechaInicio;
-    }
-
-    console.log(`🔍 Calculando desde ${inicioCalc} hasta ${fechaFin}`);
+    console.log(`📅 Calculando saldo desde ${FECHA_INICIO} hasta hoy`);
 
     // Obtener asistencias del usuario
     const asistenciasQuery = query(
@@ -310,134 +226,81 @@ async function calcularMinutosNuevos(uid, fechaInicio = null, fechaFin = null) {
     const asistenciasMap = new Map();
     asistenciasSnap.forEach(doc => {
       const data = doc.data();
-      asistenciasMap.set(data.fecha, data);
+      // Solo guardar asistencias desde la fecha de inicio
+      if (data.fecha >= FECHA_INICIO) {
+        asistenciasMap.set(data.fecha, data);
+      }
     });
 
-    let minutosNuevos = 0;
-    let diasProcesados = 0;
-    let faltasNuevas = 0;
-    let extrasNuevos = 0;
+    let saldoTotal = 0;
+    const hoy = new Date();
+    const hoyStr = todayStr();
 
-    // Recorrer días NO procesados
-    const fechaInicioCalc = new Date(inicioCalc);
-    const fechaFinCalc = new Date(fechaFin);
+    // Recorrer días DESDE FECHA_INICIO hasta hoy
+    const inicio = new Date(FECHA_INICIO);
+    const fin = new Date(hoyStr);
     
-    for (let d = new Date(fechaInicioCalc); d <= fechaFinCalc; d.setDate(d.getDate() + 1)) {
+    console.log(`🔄 Procesando días desde ${FECHA_INICIO} hasta ${hoyStr}`);
+    
+    for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
       const fechaStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       let dayNum = d.getDay();
       dayNum = dayNum === 0 ? 7 : dayNum;
 
       const diaLaboral = usuario.workSchedule?.[dayNum];
-      if (!diaLaboral) continue;
       
-      diasProcesados++;
+      // Saltar días sin horario definido
+      if (!diaLaboral) continue;
       
       const asistencia = asistenciasMap.get(fechaStr);
 
       if (asistencia) {
-        // Día trabajado: sumar late/exit
+        // Día trabajado: sumar tardanza (lateMinutes) y salida anticipada/extra (exitMinutes)
         const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
-        minutosNuevos += minutosDia;
-        console.log(`📊 ${fechaStr}: +${minutosDia} min (trabajado)`);
+        saldoTotal += minutosDia;
+        if (minutosDia !== 0) console.log(`📊 ${fechaStr}: +${minutosDia} min (trabajado)`);
       } else {
-        // Falta: sumar jornada completa
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const fechaComparar = new Date(d);
+        // Día NO trabajado: sumar jornada completa SOLO si el día ya pasó
+        const fechaComparar = new Date(fechaStr);
         fechaComparar.setHours(0, 0, 0, 0);
+        const hoyComparar = new Date(hoy);
+        hoyComparar.setHours(0, 0, 0, 0);
         
-        if (fechaComparar < hoy) {
-          minutosNuevos += JORNADA_COMPLETA_MINUTOS;
-          faltasNuevas++;
+        if (fechaComparar < hoyComparar) {
+          saldoTotal += JORNADA_COMPLETA_MINUTOS;
           console.log(`⚡ ${fechaStr}: +${JORNADA_COMPLETA_MINUTOS} min (falta)`);
         }
       }
     }
 
-    // Días extras (trabajados en días no laborables)
+    // Días extras: trabajar en día NO laborable (se RESTAN minutos)
     for (const [fechaStr, asistencia] of asistenciasMap.entries()) {
-      if (fechaStr < inicioCalc || fechaStr > fechaFin) continue;
+      if (fechaStr < FECHA_INICIO) continue;
       if (!asistencia.hora || !asistencia.salidaHora) continue;
       if (asistencia.hora === '--:--:--' || asistencia.salidaHora === '--:--:--') continue;
       
       const fecha = new Date(fechaStr);
       let dayNum = fecha.getDay();
       dayNum = dayNum === 0 ? 7 : dayNum;
-      
       const diaLaboral = usuario.workSchedule?.[dayNum];
       
       if (!diaLaboral) {
         const [hEnt, mEnt] = asistencia.hora.split(':').map(Number);
         const [hSal, mSal] = asistencia.salidaHora.split(':').map(Number);
-        
         const minutosTrabajados = (hSal * 60 + mSal) - (hEnt * 60 + mEnt);
-        
         if (minutosTrabajados > 0) {
-          minutosNuevos -= minutosTrabajados;
-          extrasNuevos++;
-          console.log(`⭐ ${fechaStr}: -${minutosTrabajados} min (extra)`);
+          saldoTotal -= minutosTrabajados;
+          console.log(`⭐ ${fechaStr}: -${minutosTrabajados} min (extra - trabajó en día libre)`);
         }
       }
     }
 
-    // Guardar la última fecha calculada
-    await updateDoc(doc(db, "usuarios", uid), {
-      ultimaFechaCalculo: fechaFin
-    });
-
-    console.log(`🎯 Minutos nuevos calculados: ${minutosNuevos} (días: ${diasProcesados}, faltas: ${faltasNuevas}, extras: ${extrasNuevos})`);
-    
-    return minutosNuevos;
+    console.log(`📊 SALDO TOTAL: ${saldoTotal} minutos`);
+    return saldoTotal;
 
   } catch (error) {
-    console.error("Error calculando minutos nuevos:", error);
+    console.error("Error calculando saldo total:", error);
     return 0;
-  }
-}
-
-/* ---------- FUNCIÓN PARA ACTUALIZAR UI CON SALDO ACUMULADO ---------- */
-async function actualizarSaldoEnUI(uid) {
-  try {
-    // 1. Obtener el saldo actual de Firebase
-    const saldoActual = await obtenerSaldoActual(uid);
-    
-    // 2. Calcular minutos nuevos desde la última vez
-    const minutosNuevos = await calcularMinutosNuevos(uid);
-    
-    // 3. Si hay minutos nuevos, actualizar el saldo acumulado
-    let saldoFinal = saldoActual;
-    if (minutosNuevos !== 0) {
-      saldoFinal = await actualizarSaldoAcumulado(uid, minutosNuevos, "Cálculo automático");
-    } else {
-      saldoFinal = saldoActual;
-    }
-    
-    // 4. Mostrar en UI
-    const saldoElement = document.getElementById("totalLateMinutes");
-    if (saldoElement) {
-      saldoElement.textContent = saldoFinal;
-      
-      if (saldoFinal > 0) {
-        saldoElement.style.color = "var(--danger)";
-        saldoElement.parentElement.style.background = "var(--danger-l)";
-        saldoElement.parentElement.title = "Tienes minutos acumulados por faltas o tardanzas";
-      } else if (saldoFinal < 0) {
-        saldoElement.style.color = "var(--success)";
-        saldoElement.parentElement.style.background = "var(--success-l)";
-        saldoElement.textContent = saldoFinal;
-        saldoElement.parentElement.title = "Tienes minutos a favor por días extras trabajados";
-      } else {
-        saldoElement.style.color = "var(--warning)";
-        saldoElement.parentElement.style.background = "var(--warning-l)";
-        saldoElement.parentElement.title = "Saldo neutro";
-      }
-    }
-    
-    return saldoFinal;
-  } catch (error) {
-    console.error("Error actualizando saldo en UI:", error);
-    // Fallback: mostrar 0
-    document.getElementById("totalLateMinutes").textContent = "0";
   }
 }
 
@@ -454,25 +317,20 @@ async function updateEmployeeView(user) {
 
   await checkToday(user);
 
-  // 👇 Usar nueva función que acumula
-  await actualizarSaldoEnUI(user.uid);
-}
-
-/* ---------- CALCULAR TOTAL MINUTOS TARDE (saldo) - MANTENIDO POR COMPATIBILIDAD ---------- */
-async function updateTotalLateMinutes(uid) {
-  try {
-    const q = query(collection(db, "asistencias"), where("uid", "==", uid));
-    const snap = await getDocs(q);
-    let total = 0;
-    snap.forEach(doc => {
-      const data = doc.data();
-      if (data.lateMinutes) total += data.lateMinutes;
-      if (data.exitMinutes) total += data.exitMinutes;
-      // if (data.lunchExtraMinutes) total += data.lunchExtraMinutes; // COMENTADO
-    });
-    document.getElementById("totalLateMinutes").textContent = total;
-  } catch (e) {
-    console.error("Error calculando minutos tarde:", e);
+  const saldoTotal = await calcularSaldoTotal(user.uid);
+  const saldoElement = document.getElementById("totalLateMinutes");
+  if (saldoElement) {
+    saldoElement.textContent = saldoTotal;
+    if (saldoTotal > 0) {
+      saldoElement.style.color = "var(--danger)";
+      saldoElement.parentElement.style.background = "var(--danger-l)";
+    } else if (saldoTotal < 0) {
+      saldoElement.style.color = "var(--success)";
+      saldoElement.parentElement.style.background = "var(--success-l)";
+    } else {
+      saldoElement.style.color = "var(--warning)";
+      saldoElement.parentElement.style.background = "var(--warning-l)";
+    }
   }
 }
 
@@ -493,19 +351,9 @@ onAuthStateChanged(auth, async user => {
       email: user.email,
       workSchedule: {},
       role: user.email === ADMIN_EMAIL ? "admin" : "empleado",
-      creadoEn: Timestamp.now(),
-      saldoTotal: 0,
-      ultimaFechaCalculo: FECHA_INICIO_SISTEMA
+      creadoEn: Timestamp.now()
     });
     userDoc = await getDoc(doc(db, "usuarios", user.uid));
-  } else {
-    // Asegurar que existan los campos de saldo
-    if (userDoc.data().saldoTotal === undefined) {
-      await updateDoc(doc(db, "usuarios", user.uid), {
-        saldoTotal: 0,
-        ultimaFechaCalculo: FECHA_INICIO_SISTEMA
-      });
-    }
   }
 
   const role = userDoc.data().role;
@@ -522,7 +370,7 @@ onAuthStateChanged(auth, async user => {
   await updateEmployeeView(user);
   startGeofenceWatch();
 
-  initDaysScheduleUI(); // para crear usuario
+  initDaysScheduleUI();
 });
 
 /* ---------- LOGIN ---------- */
@@ -559,15 +407,13 @@ window.doLogout = () => {
   signOut(auth);
 };
 
-/* ---------- CHECK TODAY (entrada/salida) ---------- */
+/* ---------- CHECK TODAY ---------- */
 async function checkToday(user) {
   const q = query(collection(db, "asistencias"),
     where("uid", "==", user.uid), where("fecha", "==", todayStr()));
   const snap = await getDocs(q);
   const btnEntrada = document.getElementById("checkBtn");
   const btnSalida = document.getElementById("exitBtn");
-  // const lunchButtonContainer = document.getElementById("lunchButtonContainer"); // COMENTADO
-  // const lunchEndBtn = document.getElementById("lunchEndBtn"); // COMENTADO
   const alreadyBox = document.getElementById("alreadyBox");
   const alreadyTime = document.getElementById("alreadyTime");
 
@@ -582,7 +428,6 @@ async function checkToday(user) {
 
     if (docData.salidaHora) {
       btnSalida.style.display = "none";
-      // lunchButtonContainer.style.display = "none"; // COMENTADO
       estado += ` · Salida: ${docData.salidaHora}`;
     } else {
       btnSalida.style.display = "block";
@@ -592,7 +437,6 @@ async function checkToday(user) {
   } else {
     btnEntrada.style.display = "block";
     btnSalida.style.display = "none";
-    // lunchButtonContainer.style.display = "none"; // COMENTADO
     alreadyBox.style.display = "none";
     window.currentAttendanceDocId = null;
   }
@@ -634,7 +478,7 @@ window.markAttendance = async () => {
       }
     }
 
-    const docRef = await addDoc(collection(db, "asistencias"), {
+    await addDoc(collection(db, "asistencias"), {
       uid: user.uid,
       email: user.email,
       nombre: user.displayName || user.email.split("@")[0],
@@ -657,12 +501,11 @@ window.markAttendance = async () => {
     document.getElementById("alreadyTime").textContent = "Entrada: " + hora;
     document.getElementById("exitBtn").style.display = "block";
 
-    window.currentAttendanceDocId = docRef.id;
-
     showToast("Entrada registrada correctamente", "success");
 
-    // 👇 Actualizar saldo acumulado
-    await actualizarSaldoEnUI(user.uid);
+    const saldoTotal = await calcularSaldoTotal(user.uid);
+    const saldoElement = document.getElementById("totalLateMinutes");
+    if (saldoElement) saldoElement.textContent = saldoTotal;
 
     if (document.getElementById("personalHistory").style.display === "block") {
       loadPersonalHistory(user.uid);
@@ -735,13 +578,13 @@ window.markExit = async () => {
     });
 
     btn.style.display = "none";
-    // document.getElementById("lunchButtonContainer").style.display = "none"; // COMENTADO
     document.getElementById("alreadyTime").textContent += ` · Salida: ${horaSalida}`;
 
     showToast("Salida registrada correctamente", "success");
 
-    // 👇 Actualizar saldo acumulado
-    await actualizarSaldoEnUI(user.uid);
+    const saldoTotal = await calcularSaldoTotal(user.uid);
+    const saldoElement = document.getElementById("totalLateMinutes");
+    if (saldoElement) saldoElement.textContent = saldoTotal;
 
     if (document.getElementById("personalHistory").style.display === "block") {
       loadPersonalHistory(user.uid);
@@ -801,14 +644,14 @@ async function loadPersonalHistory(uid) {
       return;
     }
 
-    let html = '<table class="history-table"><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Min</th></tr>';
+    let html = '<table class="history-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Min</th></tr></thead><tbody>';
     registros.forEach(r => {
       const entrada = r.hora || '—';
       const salida = r.salidaHora || '—';
       const minutos = (r.lateMinutes || 0) + (r.exitMinutes || 0);
       html += `<tr><td>${fmtDate(r.fecha)}</td><td>${entrada}</td><td>${salida}</td><td>${minutos}</td></tr>`;
     });
-    html += '</table>';
+    html += '</tbody></table>';
     listDiv.innerHTML = html;
   } catch (e) {
     listDiv.innerHTML = `<div style="color:var(--danger);">Error: ${esc(e.message)}</div>`;
@@ -894,16 +737,15 @@ async function buildCardLazy(user, selectedDate, todayRec) {
     </div>
   `;
 
-  // 👇 Agregar badge de saldo acumulado
   if (user.role !== 'admin') {
-    const saldoActual = await obtenerSaldoActual(user.id);
+    const saldoTotal = await calcularSaldoTotal(user.id);
     const badgeContainer = card.querySelector('.eac-today-badge');
     if (badgeContainer) {
       const saldoBadge = document.createElement('span');
       saldoBadge.className = 'mini-badge';
-      saldoBadge.style.background = saldoActual > 0 ? 'var(--danger-l)' : (saldoActual < 0 ? 'var(--success-l)' : 'var(--warning-l)');
-      saldoBadge.style.color = saldoActual > 0 ? 'var(--danger)' : (saldoActual < 0 ? 'var(--success)' : 'var(--warning)');
-      saldoBadge.innerHTML = `💰 ${saldoActual > 0 ? '+' : ''}${saldoActual} min`;
+      saldoBadge.style.background = saldoTotal > 0 ? 'var(--danger-l)' : (saldoTotal < 0 ? 'var(--success-l)' : 'var(--warning-l)');
+      saldoBadge.style.color = saldoTotal > 0 ? 'var(--danger)' : (saldoTotal < 0 ? 'var(--success)' : 'var(--warning)');
+      saldoBadge.innerHTML = `💰 ${saldoTotal > 0 ? '+' : ''}${saldoTotal} min`;
       badgeContainer.appendChild(saldoBadge);
     }
   }
@@ -942,8 +784,7 @@ async function loadUserHistoryPreview(uid, container, selectedDate, limitCount) 
       return;
     }
 
-    let html = `<table>
-      <tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Min</th><th></th></tr>`;
+    let html = `<table><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Min</th><th></th></tr></thead><tbody>`;
     preview.forEach(r => {
       const isToday = r.fecha === selectedDate;
       const fechaFormateada = fmtDate(r.fecha) + (isToday ? ' (hoy)' : '');
@@ -962,7 +803,7 @@ async function loadUserHistoryPreview(uid, container, selectedDate, limitCount) 
         </td>
       </tr>`;
     });
-    html += '</table>';
+    html += '</tbody></table>';
 
     if (registros.length > limitCount) {
       html += `<button class="eac-more-btn" data-uid="${uid}" data-selected="${selectedDate}">▼ Ver historial completo (${registros.length} registros)</button>`;
@@ -1005,8 +846,7 @@ async function loadFullUserHistory(uid, container, selectedDate) {
       return b.hora.localeCompare(a.hora);
     });
 
-    let html = `<table>
-      <tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Min</th><th></th></tr>`;
+    let html = `<table class="eac-table"><thead> <tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Min</th><th></th></tr> </thead><tbody>`;
     registros.forEach(r => {
       const isToday = r.fecha === selectedDate;
       const fechaFormateada = fmtDate(r.fecha) + (isToday ? ' (hoy)' : '');
@@ -1015,17 +855,17 @@ async function loadFullUserHistory(uid, container, selectedDate) {
       const minutos = (r.lateMinutes || 0) + (r.exitMinutes || 0);
       const locationIcon = r.location ? (r.withinGeofence ? '📍' : '🌍') : '';
       html += `<tr class="${isToday ? 'is-today' : ''}">
-        <td>${fechaFormateada}</td>
-        <td>${entrada}</td>
-        <td>${salida}</td>
-        <td>${minutos}</td>
+         <td>${fechaFormateada}</td>
+         <td>${entrada}</td>
+         <td>${salida}</td>
+         <td>${minutos}</td>
         <td style="text-align:right;">
           ${locationIcon}
           <span class="delete-att" data-id="${r.id}" data-uid="${uid}" data-fecha="${r.fecha}">🗑️</span>
-        </td>
-      </tr>`;
+         </td>
+       </tr>`;
     });
-    html += '</table>';
+    html += '</tbody></table>';
     html += `<button class="eac-more-btn" data-uid="${uid}" data-selected="${selectedDate}">▲ Ver menos</button>`;
 
     container.innerHTML = html;
@@ -1060,7 +900,9 @@ async function deleteAttendance(docId, uid, fecha, cardElement) {
     await loadUserHistoryPreview(uid, body, fecha, PREVIEW_ROWS);
     loadAttendance();
     if (auth.currentUser && auth.currentUser.uid === uid) {
-      await actualizarSaldoEnUI(uid);
+      const saldoTotal = await calcularSaldoTotal(uid);
+      const saldoElement = document.getElementById("totalLateMinutes");
+      if (saldoElement) saldoElement.textContent = saldoTotal;
       if (document.getElementById("personalHistory").style.display === "block") {
         loadPersonalHistory(uid);
       }
@@ -1212,9 +1054,7 @@ window.createUser = async () => {
       email,
       workSchedule: role === 'empleado' ? workSchedule : {},
       role,
-      creadoEn: Timestamp.now(),
-      saldoTotal: 0,
-      ultimaFechaCalculo: FECHA_INICIO_SISTEMA
+      creadoEn: Timestamp.now()
     });
 
     showToast(`Cuenta creada: ${name} (${email}) como ${role}`, "success");
@@ -1223,7 +1063,6 @@ window.createUser = async () => {
     document.getElementById("newEmail").value = "";
     document.getElementById("newPass").value = "";
     document.getElementById("newRole").value = "empleado";
-    // Reiniciar checkboxes
     initDaysScheduleUI();
 
     await signOut(auth);
@@ -1245,7 +1084,6 @@ window.openEditModal = (userId, userName, scheduleStr) => {
   currentEditingUserId = userId;
   document.getElementById("editUserName").textContent = userName;
 
-  // Parsear el schedule si viene como string
   let schedule = {};
   try {
     schedule = typeof scheduleStr === 'string' ? JSON.parse(scheduleStr) : scheduleStr;
@@ -1254,7 +1092,6 @@ window.openEditModal = (userId, userName, scheduleStr) => {
     schedule = {};
   }
 
-  // Inicializar el modal con el horario actual
   initDaysScheduleUI("editDaysScheduleContainer", schedule);
   document.getElementById("editScheduleModal").classList.add("show");
 };
@@ -1289,13 +1126,13 @@ window.saveScheduleEdit = async () => {
     });
     showToast("Horario actualizado correctamente", "success");
     closeEditModal();
-    loadUsers(); // recargar lista
+    loadUsers();
   } catch (e) {
     showToast("Error al guardar: " + e.message, "error");
   }
 };
 
-/* ---------- ADMIN: cargar usuarios (con botón de editar) ---------- */
+/* ---------- ADMIN: cargar usuarios ---------- */
 async function loadUsers() {
   const list = document.getElementById("usersList");
   list.innerHTML = '<div class="loading-center" style="grid-column:1/-1">Cargando...</div>';
@@ -1314,18 +1151,12 @@ async function loadUsers() {
         horario = formatWorkSchedule(u.workSchedule || {});
       }
       const avatarStyle = u.role === 'admin' ? 'background:linear-gradient(135deg,#f59e0b,#d97706);' : '';
-      
-      // Obtener saldo actual
-      const saldoActual = u.saldoTotal || 0;
-      const saldoColor = saldoActual > 0 ? '#e02424' : (saldoActual < 0 ? '#0d9f6e' : '#d97706');
-      
       return `<div class="user-card">
         <div class="uc-avatar" style="${avatarStyle}">${ini(u.nombre)}</div>
         <div>
           <div class="uc-name">${esc(u.nombre)}</div>
           <div class="uc-email">${esc(u.email)}</div>
           <div class="user-schedule" style="color:${u.role === 'admin' ? '#f59e0b' : 'var(--primary)'};">${horario}</div>
-          <div class="user-schedule" style="color:${saldoColor}; font-weight:bold;">💰 Saldo: ${saldoActual > 0 ? '+' : ''}${saldoActual} min</div>
         </div>
        <button class="edit-user-btn" onclick='openEditModal("${d.id}", "${esc(u.nombre)}", ${JSON.stringify(JSON.stringify(u.workSchedule || {}))})'>✏️</button>
       </div>`;
