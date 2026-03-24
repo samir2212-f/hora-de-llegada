@@ -9,7 +9,7 @@ import { getFirestore, collection, addDoc, query, where,
 /* ---------- CONSTANTES ---------- */
 const ADMIN_EMAIL  = "iaysoftwareliliput@gmail.com";
 const PREVIEW_ROWS = 5;
-const JORNADA_COMPLETA_MINUTOS = 9 * 60; // 540 minutos (de 9am a 6pm)
+// JORNADA_COMPLETA_MINUTOS eliminada: ahora se calcula por horario real de cada empleado
 
 /* ---------- CONFIGURACIÓN DE GEOFENCIA ---------- */
 const OFFICE_LOCATION = {
@@ -201,8 +201,7 @@ async function getEmployeeSchedule(uid) {
   return { workSchedule: {} };
 }
 
-/* ---------- FUNCIÓN PARA CALCULAR SALDO TOTAL EN TIEMPO REAL ---------- */
-/* ---------- FUNCIÓN PARA CALCULAR SALDO TOTAL DESDE FECHA FIJA ---------- */
+/* ---------- FUNCIÓN PARA CALCULAR SALDO TOTAL DESDE PRIMERA ASISTENCIA ---------- */
 async function calcularSaldoTotal(uid) {
   try {
     const usuarioDoc = await getDoc(doc(db, "usuarios", uid));
@@ -211,11 +210,6 @@ async function calcularSaldoTotal(uid) {
     const usuario = usuarioDoc.data();
     if (usuario.role === 'admin') return 0;
 
-    // FECHA FIJA DE INICIO: 22 de marzo de 2026
-    const FECHA_INICIO = "2026-03-23";
-    
-    console.log(`📅 Calculando saldo desde ${FECHA_INICIO} hasta hoy`);
-
     // Obtener asistencias del usuario
     const asistenciasQuery = query(
       collection(db, "asistencias"),
@@ -223,25 +217,29 @@ async function calcularSaldoTotal(uid) {
     );
     const asistenciasSnap = await getDocs(asistenciasQuery);
     
+    if (asistenciasSnap.empty) return 0;
+
+    // Construir mapa de asistencias
     const asistenciasMap = new Map();
-    asistenciasSnap.forEach(doc => {
-      const data = doc.data();
-      // Solo guardar asistencias desde la fecha de inicio
-      if (data.fecha >= FECHA_INICIO) {
-        asistenciasMap.set(data.fecha, data);
-      }
+    asistenciasSnap.forEach(docSnap => {
+      const data = docSnap.data();
+      asistenciasMap.set(data.fecha, data);
     });
+
+    // FECHA DE INICIO: la primera asistencia registrada del empleado
+    const fechasOrdenadas = [...asistenciasMap.keys()].sort();
+    const FECHA_INICIO = fechasOrdenadas[0];
+
+    console.log(`📅 Calculando saldo desde primera asistencia: ${FECHA_INICIO}`);
 
     let saldoTotal = 0;
     const hoy = new Date();
     const hoyStr = todayStr();
 
-    // Recorrer días DESDE FECHA_INICIO hasta hoy
-    const inicio = new Date(FECHA_INICIO);
-    const fin = new Date(hoyStr);
-    
-    console.log(`🔄 Procesando días desde ${FECHA_INICIO} hasta ${hoyStr}`);
-    
+    // Recorrer días desde la primera asistencia hasta HOY (sin incluir hoy en faltas)
+    const inicio = new Date(FECHA_INICIO + "T00:00:00");
+    const fin = new Date(hoyStr + "T00:00:00");
+
     for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
       const fechaStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       let dayNum = d.getDay();
@@ -251,35 +249,43 @@ async function calcularSaldoTotal(uid) {
       
       // Saltar días sin horario definido
       if (!diaLaboral) continue;
+
+      // Calcular minutos esperados de la jornada de ese día específico
+      const minutosJornada = (diaLaboral.endHour * 60 + diaLaboral.endMinute) -
+                             (diaLaboral.startHour * 60 + diaLaboral.startMinute);
       
       const asistencia = asistenciasMap.get(fechaStr);
 
+      // Comparar si el día ya pasó completamente (no es hoy)
+      const esHoy = fechaStr === hoyStr;
+
       if (asistencia) {
-        // Día trabajado: sumar tardanza (lateMinutes) y salida anticipada/extra (exitMinutes)
-        const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
-        saldoTotal += minutosDia;
-        if (minutosDia !== 0) console.log(`📊 ${fechaStr}: +${minutosDia} min (trabajado)`);
+        if (esHoy) {
+          // Hoy con registro: solo contar tardanza de entrada, NO exit (aún no salió o día en curso)
+          const minutosTardanza = asistencia.lateMinutes || 0;
+          saldoTotal += minutosTardanza;
+          if (minutosTardanza !== 0) console.log(`📊 ${fechaStr} (hoy, entrada): +${minutosTardanza} min tardanza`);
+        } else {
+          // Día pasado trabajado: tardanza + salida anticipada/extra
+          const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
+          saldoTotal += minutosDia;
+          if (minutosDia !== 0) console.log(`📊 ${fechaStr}: +${minutosDia} min`);
+        }
       } else {
-        // Día NO trabajado: sumar jornada completa SOLO si el día ya pasó
-        const fechaComparar = new Date(fechaStr);
-        fechaComparar.setHours(0, 0, 0, 0);
-        const hoyComparar = new Date(hoy);
-        hoyComparar.setHours(0, 0, 0, 0);
-        
-        if (fechaComparar < hoyComparar) {
-          saldoTotal += JORNADA_COMPLETA_MINUTOS;
-          console.log(`⚡ ${fechaStr}: +${JORNADA_COMPLETA_MINUTOS} min (falta)`);
+        // Día laboral SIN asistencia: solo penalizar si el día ya pasó (no hoy)
+        if (!esHoy) {
+          saldoTotal += minutosJornada;
+          console.log(`⚡ ${fechaStr}: +${minutosJornada} min (ausencia)`);
         }
       }
     }
 
-    // Días extras: trabajar en día NO laborable (se RESTAN minutos)
+    // Días extras: trabajar en día NO laborable (se RESTAN minutos al saldo)
     for (const [fechaStr, asistencia] of asistenciasMap.entries()) {
-      if (fechaStr < FECHA_INICIO) continue;
       if (!asistencia.hora || !asistencia.salidaHora) continue;
       if (asistencia.hora === '--:--:--' || asistencia.salidaHora === '--:--:--') continue;
       
-      const fecha = new Date(fechaStr);
+      const fecha = new Date(fechaStr + "T00:00:00");
       let dayNum = fecha.getDay();
       dayNum = dayNum === 0 ? 7 : dayNum;
       const diaLaboral = usuario.workSchedule?.[dayNum];
@@ -290,7 +296,7 @@ async function calcularSaldoTotal(uid) {
         const minutosTrabajados = (hSal * 60 + mSal) - (hEnt * 60 + mEnt);
         if (minutosTrabajados > 0) {
           saldoTotal -= minutosTrabajados;
-          console.log(`⭐ ${fechaStr}: -${minutosTrabajados} min (extra - trabajó en día libre)`);
+          console.log(`⭐ ${fechaStr}: -${minutosTrabajados} min (trabajó en día libre)`);
         }
       }
     }
@@ -649,7 +655,7 @@ async function loadPersonalHistory(uid) {
       const entrada = r.hora || '—';
       const salida = r.salidaHora || '—';
       const minutos = (r.lateMinutes || 0) + (r.exitMinutes || 0);
-      html += `<tr><td>${fmtDate(r.fecha)}</td><td>${entrada}</td><td>${salida}</td><td>${minutos}</td></tr>`;
+      html += `<tr><td>${fmtDate(r.fecha)}</td><td>${entrada}</td><td>${salida}</td><td>${minutos > 0 ? '+' : ''}${minutos}</td></tr>`;
     });
     html += '</tbody></table>';
     listDiv.innerHTML = html;
@@ -796,7 +802,7 @@ async function loadUserHistoryPreview(uid, container, selectedDate, limitCount) 
         <td>${fechaFormateada}</td>
         <td>${entrada}</td>
         <td>${salida}</td>
-        <td>${minutos}</td>
+        <td>${minutos > 0 ? '+' : ''}${minutos}</td>
         <td style="text-align:right;">
           ${locationIcon}
           <span class="delete-att" data-id="${r.id}" data-uid="${uid}" data-fecha="${r.fecha}">🗑️</span>
@@ -858,7 +864,7 @@ async function loadFullUserHistory(uid, container, selectedDate) {
          <td>${fechaFormateada}</td>
          <td>${entrada}</td>
          <td>${salida}</td>
-         <td>${minutos}</td>
+         <td>${minutos > 0 ? '+' : ''}${minutos}</td>
         <td style="text-align:right;">
           ${locationIcon}
           <span class="delete-att" data-id="${r.id}" data-uid="${uid}" data-fecha="${r.fecha}">🗑️</span>
