@@ -324,10 +324,17 @@ async function calcularSaldoTotal(uid) {
 
       if (asistencia) {
         if (esHoy) {
-          // Hoy con registro: solo contar tardanza de entrada, NO exit (aún no salió o día en curso)
-          const minutosTardanza = asistencia.lateMinutes || 0;
-          saldoTotal += minutosTardanza;
-          if (minutosTardanza !== 0) console.log(`📊 ${fechaStr} (hoy, entrada): +${minutosTardanza} min tardanza`);
+          // Hoy: si ya registró salida, contar tardanza + salida anticipada/extra
+          // Si aún no salió, solo contar tardanza (día en curso)
+          if (asistencia.salidaHora) {
+            const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
+            saldoTotal += minutosDia;
+            if (minutosDia !== 0) console.log(`📊 ${fechaStr} (hoy, completo): ${minutosDia} min`);
+          } else {
+            const minutosTardanza = asistencia.lateMinutes || 0;
+            saldoTotal += minutosTardanza;
+            if (minutosTardanza !== 0) console.log(`📊 ${fechaStr} (hoy, entrada): ${minutosTardanza} min tardanza`);
+          }
         } else {
           // Día pasado trabajado: tardanza + salida anticipada/extra
           const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
