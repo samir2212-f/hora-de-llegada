@@ -279,3 +279,4 @@ html,body{height:100%;font-family:'Outfit',sans-serif;background:var(--bg);color
   transition:all .2s;display:none;
 }
 .btn-retry-gps:hover{background:var(--warning);color:#fff;}
+
