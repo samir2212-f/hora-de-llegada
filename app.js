@@ -1419,3 +1419,4 @@ window.saveManualAttendance = async () => {
     btn.innerHTML = '💾 Guardar';
   }
 };
+
