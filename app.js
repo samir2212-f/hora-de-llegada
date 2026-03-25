@@ -323,23 +323,47 @@ async function calcularSaldoTotal(uid) {
       const esHoy = fechaStr === hoyStr;
 
       if (asistencia) {
-        if (esHoy) {
-          // Hoy: si ya registró salida, contar tardanza + salida anticipada/extra
-          // Si aún no salió, solo contar tardanza (día en curso)
-          if (asistencia.salidaHora) {
-            const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
-            saldoTotal += minutosDia;
-            if (minutosDia !== 0) console.log(`📊 ${fechaStr} (hoy, completo): ${minutosDia} min`);
-          } else {
-            const minutosTardanza = asistencia.lateMinutes || 0;
-            saldoTotal += minutosTardanza;
-            if (minutosTardanza !== 0) console.log(`📊 ${fechaStr} (hoy, entrada): ${minutosTardanza} min tardanza`);
+        // Recalcular desde la hora real (ignora lateMinutes/exitMinutes guardados en Firestore)
+        // Así los registros viejos también quedan corregidos con la nueva lógica
+        let minutosEntrada = 0;
+        let minutosSalida = 0;
+
+        if (asistencia.hora && asistencia.hora !== '--:--:--') {
+          const [hEnt, mEnt, sEnt] = asistencia.hora.split(':').map(Number);
+          const entradaMin = hEnt * 60 + mEnt;
+          const horarioInicioMin = diaLaboral.startHour * 60 + diaLaboral.startMinute;
+          const diff = entradaMin - horarioInicioMin;
+          if (diff > ENTRADA_TOLERANCIA) {
+            // Llegó tarde pasando la tolerancia: solo el exceso
+            minutosEntrada = diff - ENTRADA_TOLERANCIA;
+          } else if (diff < 0) {
+            // Llegó antes: minutos a favor (negativo)
+            minutosEntrada = diff;
           }
-        } else {
-          // Día pasado trabajado: tardanza + salida anticipada/extra
-          const minutosDia = (asistencia.lateMinutes || 0) + (asistencia.exitMinutes || 0);
+          // Dentro de tolerancia: minutosEntrada = 0
+        }
+
+        const tieneSalida = asistencia.salidaHora && asistencia.salidaHora !== '--:--:--';
+
+        if (!esHoy || tieneSalida) {
+          // Día con salida registrada: calcular también exitMinutes
+          if (tieneSalida) {
+            const [hSal, mSal] = asistencia.salidaHora.split(':').map(Number);
+            const salidaMin = hSal * 60 + mSal;
+            const horarioFinMin = diaLaboral.endHour * 60 + diaLaboral.endMinute;
+            if (salidaMin < horarioFinMin) {
+              minutosSalida = horarioFinMin - salidaMin; // salió antes: positivo (debe)
+            } else if (salidaMin > horarioFinMin) {
+              minutosSalida = -(salidaMin - horarioFinMin); // horas extra: negativo (a favor)
+            }
+          }
+          const minutosDia = minutosEntrada + minutosSalida;
           saldoTotal += minutosDia;
-          if (minutosDia !== 0) console.log(`📊 ${fechaStr}: +${minutosDia} min`);
+          if (minutosDia !== 0) console.log(`📊 ${fechaStr}${esHoy ? ' (hoy)' : ''}: ${minutosDia} min`);
+        } else {
+          // Hoy sin salida: solo tardanza de entrada
+          saldoTotal += minutosEntrada;
+          if (minutosEntrada !== 0) console.log(`📊 ${fechaStr} (hoy, entrada): ${minutosEntrada} min`);
         }
       } else {
         // Día laboral SIN asistencia: solo penalizar si el día ya pasó (no hoy)
