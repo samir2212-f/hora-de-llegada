@@ -9,6 +9,7 @@ import { getFirestore, collection, addDoc, query, where,
 /* ---------- CONSTANTES ---------- */
 const ADMIN_EMAIL  = "iaysoftwareliliput@gmail.com";
 const PREVIEW_ROWS = 5;
+const ENTRADA_TOLERANCIA = 10; // minutos de tolerancia en la entrada
 // JORNADA_COMPLETA_MINUTOS eliminada: ahora se calcula por horario real de cada empleado
 
 /* ---------- CONFIGURACIÓN DE GEOFENCIA ---------- */
