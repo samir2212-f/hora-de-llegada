@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Control de Asistencia · Liliput</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">🏢</div>
+      <div>
+        <div class="login-logo-text">Liliput</div>
+        <div class="login-logo-sub">Control de Asistencia</div>
+      </div>
+    </div>
+    <h1 class="login-heading">Iniciar sesión</h1>
+    <p class="login-sub">Ingresa tus credenciales para continuar</p>
+    <div class="field"><label>Correo</label>
+      <input type="email" id="loginEmail" placeholder="tu@correo.com" autocomplete="email"/></div>
+    <div class="field"><label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/></div>
+    <button class="btn-primary" id="loginBtn" onclick="doLogin()">Entrar</button>
+    <div class="error-box" id="loginError"></div>
+  </div>
+</div>
+
+<!-- EMPLEADO -->
+<div class="screen hidden" id="empScreen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon">🏢</div>
+      <span class="topbar-name">Liliput · Asistencia</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-admin" id="goToAdminBtn" onclick="showAdminPanel()" style="display:none;">Panel Admin</button>
+      <div class="user-chip">
+        <div class="user-dot"></div>
+        <span class="user-chip-email" id="empEmailChip"></span>
+      </div>
+      <button class="btn-out" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+  <div class="emp-body">
+    <div class="emp-card">
+      <div class="clock-display">
+        <div class="clock-time" id="clockTime">--:--:--</div>
+        <div class="clock-date" id="clockDate"></div>
+      </div>
+      <div class="emp-section-title">Tu cuenta</div>
+      <div class="emp-name-row">
+        <div class="emp-avatar">👤</div>
+        <div>
+          <div class="emp-name-text" id="empNameDisplay"></div>
+          <div class="emp-email-text" id="empEmailDisplay"></div>
+        </div>
+      </div>
+
+      <!-- Total minutos tarde acumulados -->
+      <div class="late-total-box">
+        <span class="late-total-label">⏰ Saldo minutos (tarde/extra)</span>
+        <span class="late-total-value" id="totalLateMinutes">0</span>
+      </div>
+
+      <!-- Estado de hoy -->
+      <div class="already-box" id="alreadyBox" style="display:none;">
+        <div class="already-icon">✅</div>
+        <div class="already-title">Asistencia registrada hoy</div>
+        <div class="already-time" id="alreadyTime"></div>
+      </div>
+
+      <!-- Botón de entrada -->
+      <button class="btn-check" id="checkBtn" onclick="markAttendance()">
+        ✔&nbsp; Registrar entrada
+      </button>
+
+      <!-- Botón de salida (inicialmente oculto) -->
+      <button class="btn-check" id="exitBtn" onclick="markExit()" style="display:none; background:linear-gradient(135deg,#d97706,#b45309);">
+        🚪&nbsp; Registrar salida
+      </button>
+
+      <!-- BOTÓN DE ALMUERZO COMENTADO PARA OCULTARLO TEMPORALMENTE -->
+      <!-- 
+      <div class="btn-row" id="lunchButtonContainer" style="display:none; margin-top:8px;">
+        <button class="btn-secondary" id="lunchEndBtn" onclick="markLunchEnd()" style="background:var(--warning-l); color:var(--warning); border-color:var(--warning);">🍽️ Terminar almuerzo</button>
+      </div>
+      -->
+
+      <!-- Botones de acciones personales -->
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="showPasswordChange()">🔐 Cambiar contraseña</button>
+        <button class="btn-secondary" onclick="toggleHistory()">📋 Ver mi historial</button>
+      </div>
+
+      <!-- Historial personal (oculto inicialmente) -->
+      <div id="personalHistory" style="display:none; margin-top:20px;">
+        <div style="font-size:13px; font-weight:700; margin-bottom:8px;">Tus registros</div>
+        <div class="history-mini" id="historyList">Cargando...</div>
+      </div>
+
+      <div class="schedule-note" id="scheduleNote">Cargando horario...</div>
+      <div class="location-status" id="locationStatus">Obteniendo ubicación...</div>
+
+      <!-- Botón reintentar GPS -->
+      <button class="btn-retry-gps" id="retryGpsBtn" onclick="retryGPS()" title="Reintentar ubicación">
+        📡 Reintentar GPS
+      </button>
+    </div>
+  </div>
+
+  <!-- Botón recargar página (fijo abajo, para App Inventor) -->
+  <button class="btn-reload-page" onclick="location.reload()" title="Recargar app">
+    🔄 Recargar
+  </button>
+</div>
+
+<!-- ADMIN -->
+<div class="screen hidden" id="adminScreen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon">⚡</div>
+      <span class="topbar-name">Panel Admin · Liliput</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-chip">
+        <div class="user-dot" style="background:#f59e0b;"></div>
+        <span class="user-chip-email" id="adminEmail"></span>
+      </div>
+      <button class="btn-out" onclick="goToEmployeeScreen()">Volver a mi asistencia</button>
+      <button class="btn-out" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+
+  <div class="admin-body">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('asistencias',this)">📋 Asistencias</div>
+      <div class="tab" onclick="switchTab('crear',this)">➕ Crear usuario</div>
+      <div class="tab" onclick="switchTab('usuarios',this)">👥 Usuarios</div>
+    </div>
+
+    <!-- ASISTENCIAS -->
+    <div class="tab-content active" id="tab-asistencias">
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="stTotal">—</div><div class="stat-lbl">Registros hoy</div></div>
+      </div>
+      <div class="filter-bar">
+        <label>Fecha:</label>
+        <input type="date" id="filterDate" max=""/>
+        <button class="btn-sm primary" onclick="loadAttendance()">Filtrar</button>
+        <button class="btn-sm ghost" onclick="goToday()">Hoy</button>
+        <button class="btn-sm ghost" onclick="goYesterday()">Ayer</button>
+        <button class="btn-sm ghost" onclick="goThisWeek()">Esta semana</button>
+        <button class="btn-sm success" onclick="exportToCSV()">⬇ CSV</button>
+      </div>
+      <div id="empCardsArea"><div class="loading-center">Cargando...</div></div>
+    </div>
+
+    <!-- CREAR USUARIO -->
+    <div class="tab-content" id="tab-crear">
+      <div class="create-form">
+        <h3>Crear cuenta</h3>
+        <p>Puedes crear empleados o administradores. Los administradores tendrán acceso al panel.</p>
+        <div class="field"><label>Nombre completo</label>
+          <input type="text" id="newName" placeholder="Ej: Juan Pérez"/></div>
+        <div class="field"><label>Correo electrónico</label>
+          <input type="email" id="newEmail" placeholder="usuario@empresa.com"/></div>
+        <div class="field"><label>Contraseña</label>
+          <input type="password" id="newPass" placeholder="Mínimo 6 caracteres"/></div>
+        
+        <!-- Días laborales con horario por día (entrada y salida) -->
+        <div class="field">
+          <label>Días laborales y horario</label>
+          <div id="daysScheduleContainer"></div>
+          <div class="field-note">Selecciona los días y define para cada uno el rango de entrada esperado.</div>
+        </div>
+
+        <div class="field">
+          <label>Rol</label>
+          <select id="newRole">
+            <option value="empleado">Empleado</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+
+        <button class="btn-primary" id="createBtn" onclick="createUser()">Crear cuenta</button>
+        <div class="error-box" id="createError"></div>
+      </div>
+    </div>
+
+    <!-- USUARIOS (con botón de editar) -->
+    <div class="tab-content" id="tab-usuarios">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:14px;
+        padding:18px 20px;box-shadow:var(--shadow);">
+        <div style="font-size:14px;font-weight:700;">Usuarios registrados</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Cuentas activas en el sistema</div>
+      </div>
+      <div class="users-grid" id="usersList">
+        <div class="loading-center" style="grid-column:1/-1">Cargando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PARA EDITAR HORARIO -->
+<div class="modal" id="editScheduleModal">
+  <div class="modal-content">
+    <span class="modal-close" onclick="closeEditModal()">&times;</span>
+    <h3 id="editModalTitle">Editar horario de <span id="editUserName"></span></h3>
+    <p>Modifica los días y horas de trabajo.</p>
+    <div id="editDaysScheduleContainer"></div>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button class="btn-primary" id="saveScheduleBtn" onclick="saveScheduleEdit()">Guardar cambios</button>
+      <button class="btn-secondary" onclick="closeEditModal()">Cancelar</button>
+    </div>
+    <div class="error-box" id="editError"></div>
+  </div>
+</div>
+
+<!-- MODAL REGISTRO MANUAL DE ASISTENCIA -->
+<div class="modal" id="manualAttModal">
+  <div class="modal-content">
+    <span class="modal-close" onclick="closeManualAttModal()">&times;</span>
+    <h3>📝 Registrar asistencia manual</h3>
+    <p style="color:var(--muted);font-size:13px;">Para <strong id="manualAttName"></strong></p>
+    <div class="field">
+      <label>Fecha</label>
+      <input type="date" id="manualAttFecha" />
+    </div>
+    <div class="field">
+      <label>Hora de entrada</label>
+      <input type="time" id="manualAttEntrada" step="1" value="09:00:00" />
+    </div>
+    <div class="field">
+      <label>Hora de salida <span style="color:var(--muted);font-weight:400;">(opcional)</span></label>
+      <input type="time" id="manualAttSalida" step="1" />
+    </div>
+    <div class="error-box" id="manualAttError"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-primary" onclick="saveManualAttendance()">💾 Guardar</button>
+      <button class="btn-secondary" onclick="closeManualAttModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
